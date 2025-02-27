@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React from "react";
 import DashboardHeader from "./layout/DashboardHeader";
-import RequestStepper from "./asset-request/RequestStepper";
 import RequestForm from "./asset-request/RequestForm";
 import RequestStatus from "./asset-request/RequestStatus";
+import RequestList from "./asset-request/RequestList";
 
 interface HomeProps {
   user?: {
@@ -19,12 +19,6 @@ const Home = ({
     avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=John",
   },
 }: HomeProps) => {
-  const [currentStep, setCurrentStep] = useState(0);
-
-  const handleStepClick = (step: number) => {
-    setCurrentStep(step);
-  };
-
   const handleFormSubmit = (data: any) => {
     console.log("Form submitted:", data);
     // Handle form submission logic here
@@ -45,39 +39,12 @@ const Home = ({
         </div>
 
         <div className="mb-8">
-          <RequestStepper
-            steps={[
-              {
-                label: "Asset Details",
-                completed: currentStep > 0,
-                current: currentStep === 0,
-              },
-              {
-                label: "Purpose",
-                completed: currentStep > 1,
-                current: currentStep === 1,
-              },
-              {
-                label: "Duration",
-                completed: currentStep > 2,
-                current: currentStep === 2,
-              },
-              {
-                label: "Review",
-                completed: currentStep > 3,
-                current: currentStep === 3,
-              },
-            ]}
-            onStepClick={handleStepClick}
-          />
+          <RequestList />
         </div>
 
         <div className="flex flex-col lg:flex-row gap-8">
           <div className="flex-1">
-            <RequestForm
-              initialStep={currentStep}
-              onSubmit={handleFormSubmit}
-            />
+            <RequestForm onSubmit={handleFormSubmit} />
           </div>
           <div className="lg:w-[300px]">
             <RequestStatus />

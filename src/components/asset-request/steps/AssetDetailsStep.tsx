@@ -1,8 +1,16 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useMsal } from "@azure/msal-react";
 import { Card } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
+import { useAssetRequest } from "@/contexts/AssetRequestContext";
+import { assetService } from "@/services/assetService";
+import { useFormContext } from "react-hook-form";
+import {
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import {
   Select,
   SelectContent,
@@ -10,330 +18,287 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import type { AssetRequestFormData } from "@/lib/validations/asset-request";
 
 interface AssetDetailsStepProps {
   onNext?: () => void;
-  onPrevious?: () => void;
-  data?: {
-    requesterType: string;
-    requesterName: string;
-    staffNumber?: string;
-    userId?: string;
-    location?: string;
-    organization?: string;
-    authorizationDoc?: File;
-    branchOffice: string;
-    assetType: string;
-    assetName: string;
-    assetModel: string;
-    serialNumber: string;
-    tagNumber: string;
-    specifications: string;
-    condition: string;
-  };
-  onChange?: (data: any) => void;
 }
 
-const AssetDetailsStep = ({
-  onNext = () => {},
-  onPrevious = () => {},
-  data = {
-    requesterType: "staff",
-    requesterName: "",
-    staffNumber: "",
-    userId: "",
-    location: "",
-    organization: "",
-    authorizationDoc: undefined,
-    branchOffice: "headquarters",
-    assetType: "",
-    assetName: "",
-    assetModel: "",
-    serialNumber: "",
-    tagNumber: "",
-    specifications: "",
-    condition: "good",
-  },
-  onChange = () => {},
-}: AssetDetailsStepProps) => {
+const AssetDetailsStep = ({ onNext = () => {} }: AssetDetailsStepProps) => {
+  const { state, dispatch } = useAssetRequest();
   const { accounts } = useMsal();
-  const activeAccount = accounts[0];
+  const form = useFormContext<AssetRequestFormData>();
 
-  // Update data with AD info when account changes
-  React.useEffect(() => {
-    if (activeAccount && data.requesterType === "staff") {
-      onChange({
-        ...data,
-        requesterName: activeAccount.name || "",
-        staffNumber: activeAccount.username || "",
+  if (!form) {
+    return (
+      <div className="p-4 text-red-500">
+        Form context not found. Please ensure this component is used within a
+        FormProvider.
+      </div>
+    );
+  }
+
+  useEffect(() => {
+    const fetchAssets = async () => {
+      try {
+        dispatch({ type: "SET_LOADING", payload: true });
+        const assets = await assetService.getAssets();
+        dispatch({ type: "SET_ASSETS", payload: assets });
+      } catch (error) {
+        console.error("Error fetching assets:", error);
+        dispatch({ type: "SET_ERROR", payload: "Failed to fetch assets" });
+      } finally {
+        dispatch({ type: "SET_LOADING", payload: false });
+      }
+    };
+
+    fetchAssets();
+  }, [dispatch]);
+
+  const handleAssetSelect = (assetId: string) => {
+    const selectedAsset = state.assets.find((asset) => asset.id === assetId);
+    if (selectedAsset) {
+      form.setValue("assetDetails", {
+        assetId: selectedAsset.id,
+        assetType: selectedAsset.type,
+        assetName: selectedAsset.name,
+        assetModel: selectedAsset.model,
+        serialNumber: selectedAsset.serial_number,
+        tagNumber: selectedAsset.tag_number,
+        specifications: selectedAsset.specifications || "",
+        condition: selectedAsset.condition,
       });
     }
-  }, [activeAccount, data.requesterType]);
+  };
+
+  const availableAssets = state.assets.filter(
+    (asset) => asset.status === "available",
+  );
+
+  const assetId = form.watch("assetDetails.assetId");
 
   return (
-    <Card className="p-6 bg-white w-full max-w-[700px]">
-      <div className="space-y-6">
-        <div className="space-y-2">
-          <Label htmlFor="requesterType">Requester Type</Label>
-          <Select
-            value={data.requesterType}
-            onValueChange={(value) =>
-              onChange({ ...data, requesterType: value })
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select requester type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="staff">Staff</SelectItem>
-              <SelectItem value="non-staff">Non-Staff</SelectItem>
-            </SelectContent>
-          </Select>
+    <Card className="p-8 bg-white w-full max-w-[800px] shadow-lg">
+      <div className="space-y-8">
+        <div className="space-y-3 border-b pb-6">
+          <h2 className="text-3xl font-bold tracking-tight text-gray-900">
+            Asset Details
+          </h2>
+          <p className="text-gray-500 text-lg">
+            Select an existing asset from inventory or enter details manually
+          </p>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="requesterName">Requester Name</Label>
-          {data.requesterType === "staff" ? (
-            <Input
-              id="requesterName"
-              value={data.requesterName}
-              readOnly
-              className="bg-gray-50"
-            />
-          ) : (
-            <Input
-              id="requesterName"
-              placeholder="Enter your full name"
-              value={data.requesterName}
-              onChange={(e) =>
-                onChange({ ...data, requesterName: e.target.value })
-              }
-            />
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="branchOffice">Branch Office</Label>
-          <Select
-            value={data.branchOffice}
-            onValueChange={(value) =>
-              onChange({ ...data, branchOffice: value })
-            }
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select branch office" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="headquarters">
-                Headquarters (Mombasa)
-              </SelectItem>
-              <SelectItem value="lamu">Lamu Office</SelectItem>
-              <SelectItem value="lodwar">Lodwar Office</SelectItem>
-              <SelectItem value="kisumu">Kisumu Office</SelectItem>
-              <SelectItem value="naivasha">Naivasha Office</SelectItem>
-              <SelectItem value="kpa">KPA Office</SelectItem>
-              <SelectItem value="nakuru">Nakuru Office</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {data.requesterType === "staff" ? (
-          <div className="space-y-2">
-            <Label htmlFor="staffNumber">Staff Number</Label>
-            <Input
-              id="staffNumber"
-              value={data.staffNumber}
-              readOnly
-              className="bg-gray-50"
-            />
+        {state.loading ? (
+          <div className="flex flex-col items-center justify-center py-8 space-y-4">
+            <Spinner size="lg" />
+            <p className="text-sm text-gray-500">Loading available assets...</p>
+          </div>
+        ) : state.error ? (
+          <div className="text-red-600 py-4">
+            <p>{state.error}</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="userId">User ID</Label>
-              <Input
-                id="userId"
-                placeholder="Enter user ID"
-                value={data.userId}
-                onChange={(e) => onChange({ ...data, userId: e.target.value })}
+          <div className="space-y-8">
+            <div className="bg-blue-50 p-6 rounded-lg border border-blue-100 space-y-4">
+              <FormField
+                control={form.control}
+                name="assetDetails.assetId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-lg font-semibold text-blue-900">
+                      Select Asset
+                    </FormLabel>
+                    <Select
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        handleAssetSelect(value);
+                      }}
+                      value={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="h-12 text-base">
+                          <SelectValue placeholder="Choose an asset from inventory" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {availableAssets.map((asset) => (
+                          <SelectItem key={asset.id} value={asset.id}>
+                            {asset.name} - {asset.tag_number}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="location">Location</Label>
-              <Input
-                id="location"
-                placeholder="Enter location"
-                value={data.location}
-                onChange={(e) =>
-                  onChange({ ...data, location: e.target.value })
-                }
+
+            <div className="grid grid-cols-2 gap-6">
+              <FormField
+                control={form.control}
+                name="assetDetails.assetType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      Asset Type
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        readOnly={!!assetId}
+                        className={assetId ? "bg-gray-50" : ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="assetDetails.assetName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      Asset Name
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        readOnly={!!assetId}
+                        className={assetId ? "bg-gray-50" : ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="organization">Organization</Label>
-              <Input
-                id="organization"
-                placeholder="Enter organization"
-                value={data.organization}
-                onChange={(e) =>
-                  onChange({ ...data, organization: e.target.value })
-                }
+
+            <div className="grid grid-cols-2 gap-6">
+              <FormField
+                control={form.control}
+                name="assetDetails.assetModel"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      Asset Model
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        readOnly={!!assetId}
+                        className={assetId ? "bg-gray-50" : ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="assetDetails.serialNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      Serial Number
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        readOnly={!!assetId}
+                        className={assetId ? "bg-gray-50" : ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="authorizationDoc">Authorization Document</Label>
-              <Input
-                id="authorizationDoc"
-                type="file"
-                accept=".pdf,.doc,.docx,image/*"
-                onChange={(e) =>
-                  onChange({
-                    ...data,
-                    authorizationDoc: e.target.files?.[0],
-                  })
-                }
+
+            <div className="grid grid-cols-2 gap-6">
+              <FormField
+                control={form.control}
+                name="assetDetails.tagNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      Tag Number
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        readOnly={!!assetId}
+                        className={assetId ? "bg-gray-50" : ""}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-              <p className="text-sm text-gray-500">
-                Please upload authorization letter or relevant documentation
-              </p>
+
+              <FormField
+                control={form.control}
+                name="assetDetails.condition"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">
+                      Asset Condition
+                    </FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                      disabled={!!assetId}
+                    >
+                      <FormControl>
+                        <SelectTrigger className={assetId ? "bg-gray-50" : ""}>
+                          <SelectValue placeholder="Select asset condition" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="excellent">Excellent</SelectItem>
+                        <SelectItem value="good">Good</SelectItem>
+                        <SelectItem value="fair">Fair</SelectItem>
+                        <SelectItem value="poor">Poor</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
+
+            <FormField
+              control={form.control}
+              name="assetDetails.specifications"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Specifications</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      {...field}
+                      readOnly={!!assetId}
+                      className={`min-h-[100px] ${assetId ? "bg-gray-50" : ""}`}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </div>
         )}
 
-        <div className="space-y-2">
-          <Label htmlFor="assetType">Asset Type</Label>
-          <Select
-            defaultValue={data.assetType}
-            onValueChange={(value) => onChange({ ...data, assetType: value })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select asset type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ict-equipment">ICT Equipment</SelectItem>
-              <SelectItem value="office-equipment">Office Equipment</SelectItem>
-              <SelectItem value="furniture">Furniture</SelectItem>
-              <SelectItem value="vehicle">Vehicle</SelectItem>
-              <SelectItem value="marine-equipment">Marine Equipment</SelectItem>
-              <SelectItem value="safety-equipment">Safety Equipment</SelectItem>
-              <SelectItem value="tools">Tools & Equipment</SelectItem>
-              <SelectItem value="other">Other Assets</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="assetName">Asset Name</Label>
-          <Input
-            id="assetName"
-            placeholder="Enter asset name"
-            value={data.assetName}
-            onChange={(e) => onChange({ ...data, assetName: e.target.value })}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="assetModel">Asset Model</Label>
-          <Input
-            id="assetModel"
-            placeholder="Enter asset model"
-            value={data.assetModel}
-            onChange={(e) => onChange({ ...data, assetModel: e.target.value })}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="serialNumber">Serial Number</Label>
-          <Input
-            id="serialNumber"
-            placeholder="Enter serial number"
-            value={data.serialNumber}
-            onChange={(e) =>
-              onChange({ ...data, serialNumber: e.target.value })
-            }
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="tagNumber">Tag Number</Label>
-          <Input
-            id="tagNumber"
-            placeholder="Enter tag number"
-            value={data.tagNumber}
-            onChange={(e) => onChange({ ...data, tagNumber: e.target.value })}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="specifications">Specifications</Label>
-          <Textarea
-            id="specifications"
-            placeholder="Enter asset specifications"
-            value={data.specifications}
-            onChange={(e) =>
-              onChange({ ...data, specifications: e.target.value })
-            }
-            className="min-h-[100px]"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Asset Condition Photos</Label>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="frontPhoto" className="text-sm text-gray-500">
-                Front View
-              </Label>
-              <Input
-                id="frontPhoto"
-                type="file"
-                accept="image/*"
-                className="mt-1"
-                onChange={(e) =>
-                  onChange({
-                    ...data,
-                    frontPhoto: e.target.files?.[0],
-                  })
-                }
-              />
-            </div>
-            <div>
-              <Label htmlFor="backPhoto" className="text-sm text-gray-500">
-                Back View
-              </Label>
-              <Input
-                id="backPhoto"
-                type="file"
-                accept="image/*"
-                className="mt-1"
-                onChange={(e) =>
-                  onChange({
-                    ...data,
-                    backPhoto: e.target.files?.[0],
-                  })
-                }
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="condition">Asset Condition</Label>
-          <Select
-            defaultValue={data.condition}
-            onValueChange={(value) => onChange({ ...data, condition: value })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select asset condition" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="excellent">Excellent</SelectItem>
-              <SelectItem value="good">Good</SelectItem>
-              <SelectItem value="fair">Fair</SelectItem>
-              <SelectItem value="poor">Poor</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex justify-end pt-8 border-t">
+          <Button onClick={onNext} size="lg" className="px-8">
+            Continue to Purpose
+          </Button>
         </div>
       </div>
     </Card>

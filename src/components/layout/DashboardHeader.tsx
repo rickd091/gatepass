@@ -1,5 +1,6 @@
 import React from "react";
 import { Bell, Settings, User } from "lucide-react";
+import { NotificationBadge } from "@/components/ui/notification-badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +15,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useNotifications } from "@/contexts/NotificationContext";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { format } from "date-fns";
 
 interface DashboardHeaderProps {
   user?: {
@@ -21,11 +25,6 @@ interface DashboardHeaderProps {
     email: string;
     avatar?: string;
   };
-  notifications?: Array<{
-    id: string;
-    message: string;
-  }>;
-  onNotificationClick?: (id: string) => void;
   onSettingsClick?: () => void;
   onProfileClick?: () => void;
 }
@@ -36,15 +35,10 @@ const DashboardHeader = ({
     email: "john@example.com",
     avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=John",
   },
-  notifications = [
-    { id: "1", message: "Your asset request was approved" },
-    { id: "2", message: "New asset available for request" },
-    { id: "3", message: "Reminder: Asset return due tomorrow" },
-  ],
-  onNotificationClick = () => {},
   onSettingsClick = () => {},
   onProfileClick = () => {},
 }: DashboardHeaderProps) => {
+  const { notifications, unreadCount, markAsRead } = useNotifications();
   return (
     <header className="w-full h-16 bg-white border-b border-gray-200 px-4 flex items-center justify-between fixed top-0 left-0 right-0 z-50">
       <div className="flex items-center space-x-4">
@@ -65,11 +59,7 @@ const DashboardHeader = ({
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="relative">
                     <Bell className="h-5 w-5" />
-                    {notifications.length > 0 && (
-                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                        {notifications.length}
-                      </span>
-                    )}
+                    <NotificationBadge count={unreadCount} />
                   </Button>
                 </DropdownMenuTrigger>
               </TooltipTrigger>
@@ -77,16 +67,44 @@ const DashboardHeader = ({
                 <p>Notifications</p>
               </TooltipContent>
             </Tooltip>
-            <DropdownMenuContent align="end" className="w-64">
-              {notifications.map((notification) => (
-                <DropdownMenuItem
-                  key={notification.id}
-                  onClick={() => onNotificationClick(notification.id)}
-                  className="py-2 px-4 cursor-pointer"
-                >
-                  <span className="text-sm">{notification.message}</span>
-                </DropdownMenuItem>
-              ))}
+            <DropdownMenuContent align="end" className="w-96">
+              <ScrollArea className="h-[300px]">
+                {notifications.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-gray-500">
+                    No notifications
+                  </div>
+                ) : (
+                  notifications.map((notification) => (
+                    <DropdownMenuItem
+                      key={notification.id}
+                      onClick={() => {
+                        markAsRead(notification.id);
+                        if (notification.link) {
+                          window.location.href = notification.link;
+                        }
+                      }}
+                      className={`py-3 px-4 cursor-pointer border-b last:border-b-0 ${!notification.read ? "bg-blue-50" : ""}`}
+                    >
+                      <div className="flex flex-col gap-1 w-full">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-sm">
+                            {notification.title}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {format(
+                              new Date(notification.created_at),
+                              "MMM d, h:mm a",
+                            )}
+                          </span>
+                        </div>
+                        <span className="text-sm text-gray-600">
+                          {notification.message}
+                        </span>
+                      </div>
+                    </DropdownMenuItem>
+                  ))
+                )}
+              </ScrollArea>
             </DropdownMenuContent>
           </DropdownMenu>
         </TooltipProvider>
